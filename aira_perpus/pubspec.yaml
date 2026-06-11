@@ -1,0 +1,41 @@
+name: aira_perpus
+description: Aplikasi Pengelolaan Perpustakaan SMPN 03 Sutojayan dengan Flutter.
+version: 1.0.0+1
+
+publish_to: 'none'
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Icons premium tambahan
+  lucide_icons: ^0.257.0
+
+  # Font modern agar tampilan elegan seperti di Google AI Studio
+  google_fonts: ^6.1.0
+
+  # Rekomendasi Database A: Supabase (PostgreSQL gratis dengan performa kencang)
+  supabase_flutter: ^2.6.0
+
+  # Rekomendasi Database B: Firebase (NoSQL gratis dengan cache offline luar biasa saat internet mati)
+  # Untuk mengaktifkan Firebase, hapus tanda '#' di bawah dan ikut panduan konfigurasi 'flutterfire'
+  # firebase_core: ^3.1.0
+  # cloud_firestore: ^5.0.1
+
+  # Penyimpanan lokal cache sirkulasi mandiri di memori komputer
+  shared_preferences: ^2.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Jika Anda memiliki aset gambar/logo perpustakaan, daftarkan di bawah ini:
+  # assets:
+  #   - assets/logo.png
