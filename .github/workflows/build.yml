@@ -48,7 +48,17 @@ jobs:
 
       - name: Compress Windows Build
         shell: pwsh
-        run: Compress-Archive -Path aira_perpus/build/windows/x64/runner/Release/* -DestinationPath aira_perpus/build/AiraPerpus-Windows.zip
+        run: |
+          $releaseDir = "aira_perpus/build/windows/x64/runner/Release"
+          if (-not (Test-Path $releaseDir)) {
+              $releaseDir = "aira_perpus/build/windows/runner/Release"
+          }
+          if (-not (Test-Path $releaseDir)) {
+              Write-Error "Release build directory not found! Ensure the build completed successfully."
+              exit 1
+          }
+          Write-Host "Compressing files from $releaseDir..."
+          Compress-Archive -Path "$releaseDir/*" -DestinationPath "aira_perpus/build/AiraPerpus-Windows.zip" -Force
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
@@ -86,7 +96,7 @@ jobs:
 
       - name: Build Web (Release)
         working-directory: aira_perpus
-        run: flutter build web --release --web-renderer html --base-href "/${{ github.event.repository.name }}/"
+        run: flutter build web --release --base-href "/${{ github.event.repository.name }}/"
 
       - name: Upload Web Artifact
         uses: actions/upload-artifact@v4
