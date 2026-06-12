@@ -50,9 +50,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: aira-perpus-windows-app
-          path: |
-            aira_perpus/build/windows/x64/runner/Release/
-            aira_perpus/build/windows/runner/Release/
+          path: aira_perpus/build/windows/x64/runner/Release/
           if-no-files-found: warn
 
   build-web:
