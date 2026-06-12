@@ -5,9 +5,9 @@ class AppConfig {
   static String _customAnonKey = "";
 
   static const String defaultSupabaseUrl =
-      "https://jnfasfcbtonkdhsoupmm.supabase.co";
+      "";
   static const String defaultSupabaseAnonKey =
-      "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpuZmFzZmNidG9ua2Roc291cG1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODExNDYyOTcsImV4cCI6MjA5NjcyMjI5N30.fUqpYsb8zpMHhCkGNCA5kv-Rp9sl78t_T8nBlKHHOKM";
+      "";
 
   static String get supabaseUrl =>
       _customUrl.isNotEmpty ? _customUrl : defaultSupabaseUrl;
