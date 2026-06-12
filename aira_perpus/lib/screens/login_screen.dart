@@ -21,7 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
     {
       'email': 'smpn3@sutojayan.sch.id',
       'password': 'smpn3sutojayan',
-      'school_name': 'SMPN 03 SUTOJAYAN',
+      'school_name': 'SMP NEGERI GLOBAL',
       'operator': 'Admin Perpus Kelompok A'
     },
     {
@@ -137,7 +137,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!AppConfig.isConfigured) {
       _showErrorSnackBar(
-          "Koneksi Supabase belum aktif! Akun ini tidak terdaftar secara offline, dan 'my_perpus_app/lib/config.dart' Anda masih berisi URL/Key placeholder.");
+          "Koneksi Supabase belum aktif! Akun ini tidak terdaftar secara offline, dan 'aira_perpus/lib/config.dart' Anda masih berisi URL/Key placeholder.");
     } else {
       _showErrorSnackBar(
           "Gagal login: Email/Sandi salah atau akun belum terverifikasi di Supabase.");
@@ -210,7 +210,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       controller: schoolCtrl,
                       decoration: const InputDecoration(
                         labelText: 'Nama Sekolah / Institusi *',
-                        hintText: 'SMPN 03 Sutojayan',
+                        hintText: 'SMP Negeri Global',
                         border: OutlineInputBorder(),
                       ),
                     ),
