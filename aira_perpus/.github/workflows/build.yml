@@ -1,4 +1,4 @@
-name: Build Windows App
+name: Build Flutter Apps
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build-windows:
@@ -24,11 +27,11 @@ jobs:
         run: flutter config --enable-windows-desktop
 
       - name: Get Dependencies
-        working-directory: aira_perpus
+        working-directory: my_perpus_app
         run: flutter pub get
 
       - name: Ensure Windows Platform Folder Exists
-        working-directory: aira_perpus
+        working-directory: my_perpus_app
         shell: pwsh
         run: |
           if (-not (Test-Path "windows")) {
@@ -37,16 +40,56 @@ jobs:
           }
 
       - name: Build Windows (Release)
-        working-directory: aira_perpus
+        working-directory: my_perpus_app
         run: flutter build windows --release
-
-      - name: Compress Windows Build
-        working-directory: aira_perpus/build/windows/runner/Release
-        shell: pwsh
-        run: Compress-Archive -Path * -DestinationPath ../../../AiraPerpus-Windows.zip
 
       - name: Upload Windows Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AiraPerpus-Windows-Installer
-          path: aira_perpus/build/windows/runner/AiraPerpus-Windows.zip
+          name: aira-perpus-windows-app
+          path: my_perpus_app/build/windows/x64/runner/Release/
+
+  build-web:
+    name: Build Flutter Web
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
+      - name: Enable Web Support
+        run: flutter config --enable-web
+
+      - name: Get Dependencies
+        working-directory: my_perpus_app
+        run: flutter pub get
+
+      - name: Ensure Web Platform Folder Exists
+        working-directory: my_perpus_app
+        run: |
+          if [ ! -d "web" ]; then
+            echo "Web folder is missing. Recreating via flutter create..."
+            flutter create --platforms=web .
+          fi
+
+      - name: Build Web (Release)
+        working-directory: my_perpus_app
+        run: flutter build web --release --web-renderer html --base-href "/${{ github.event.repository.name }}/"
+
+      - name: Upload Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aira-perpus-web-app
+          path: my_perpus_app/build/web/
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: my_perpus_app/build/web
+

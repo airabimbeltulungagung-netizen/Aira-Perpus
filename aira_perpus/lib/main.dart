@@ -18,6 +18,7 @@ import 'screens/cards_tab.dart';
 import 'screens/visitors_tab.dart';
 import 'screens/transactions_tab.dart';
 import 'screens/settings_tab.dart';
+import 'screens/remote_scanner_tab.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -639,6 +640,8 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
               'Presensi Masuk', Icons.how_to_reg_rounded, 'visitors', isDrawer),
           _buildSidebarNavItem('Peminjaman (Scan)', Icons.swap_horiz_outlined,
               'transactions', isDrawer),
+          _buildSidebarNavItem('Satelit Scanner HP',
+              Icons.phonelink_ring_rounded, 'remote_scanner', isDrawer),
           _buildSidebarNavItem(
               'Pengaturan', Icons.settings_outlined, 'settings', isDrawer),
           const Spacer(),
@@ -851,6 +854,15 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
           transactions: _transactions,
           books: _books,
           members: _members,
+          onProcessBorrow: _processBorrow,
+          onProcessReturn: _processReturn,
+          triggerSnackBar: _triggerSnackBar,
+        );
+      case 'remote_scanner':
+        return RemoteScannerTab(
+          members: _members,
+          books: _books,
+          onRegisterVisitor: _registerVisitor,
           onProcessBorrow: _processBorrow,
           onProcessReturn: _processReturn,
           triggerSnackBar: _triggerSnackBar,
