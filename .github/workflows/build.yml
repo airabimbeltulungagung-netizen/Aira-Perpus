@@ -25,6 +25,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true
 
       - name: Enable Windows Desktop Support
         run: flutter config --enable-windows-desktop
@@ -32,6 +33,20 @@ jobs:
       - name: Get Dependencies
         working-directory: aira_perpus
         run: flutter pub get
+
+      - name: Create config.dart from Secrets
+        working-directory: aira_perpus
+        shell: bash
+        run: |
+          mkdir -p lib
+          cat <<EOF > lib/config.dart
+          class AppConfig {
+            static const String supabaseUrl = '${{ secrets.SUPABASE_URL }}';
+            static const String supabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
+            static bool get isConfigured => supabaseUrl.isNotEmpty;
+            static Future<void> loadCustomConfigs() async {}
+          }
+          EOF
 
       - name: Ensure Windows Platform Folder Exists
         working-directory: aira_perpus
@@ -78,6 +93,7 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: 'stable'
+          cache: true
 
       - name: Enable Web Support
         run: flutter config --enable-web
@@ -85,6 +101,20 @@ jobs:
       - name: Get Dependencies
         working-directory: aira_perpus
         run: flutter pub get
+
+      - name: Create config.dart from Secrets
+        working-directory: aira_perpus
+        shell: bash
+        run: |
+          mkdir -p lib
+          cat <<EOF > lib/config.dart
+          class AppConfig {
+            static const String supabaseUrl = '${{ secrets.SUPABASE_URL }}';
+            static const String supabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
+            static bool get isConfigured => supabaseUrl.isNotEmpty;
+            static Future<void> loadCustomConfigs() async {}
+          }
+          EOF
 
       - name: Ensure Web Platform Folder Exists
         working-directory: aira_perpus
