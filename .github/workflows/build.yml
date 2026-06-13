@@ -39,12 +39,19 @@ jobs:
         shell: bash
         run: |
           mkdir -p lib
-          cat <<EOF > lib/config.dart
+          cat <<'EOF' > lib/config.dart
           class AppConfig {
             static const String supabaseUrl = '${{ secrets.SUPABASE_URL }}';
             static const String supabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
+            
+            static const String defaultSupabaseUrl = '${{ secrets.SUPABASE_URL }}';
+            static const String defaultSupabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
+            
             static bool get isConfigured => supabaseUrl.isNotEmpty;
+            
             static Future<void> loadCustomConfigs() async {}
+            static Future<void> clearCustomConfigs() async {}
+            static Future<void> saveCustomConfigs(String url, String key) async {}
           }
           EOF
 
@@ -107,12 +114,19 @@ jobs:
         shell: bash
         run: |
           mkdir -p lib
-          cat <<EOF > lib/config.dart
+          cat <<'EOF' > lib/config.dart
           class AppConfig {
             static const String supabaseUrl = '${{ secrets.SUPABASE_URL }}';
             static const String supabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
+            
+            static const String defaultSupabaseUrl = '${{ secrets.SUPABASE_URL }}';
+            static const String defaultSupabaseAnonKey = '${{ secrets.SUPABASE_ANON_KEY }}';
+            
             static bool get isConfigured => supabaseUrl.isNotEmpty;
+            
             static Future<void> loadCustomConfigs() async {}
+            static Future<void> clearCustomConfigs() async {}
+            static Future<void> saveCustomConfigs(String url, String key) async {}
           }
           EOF
 
