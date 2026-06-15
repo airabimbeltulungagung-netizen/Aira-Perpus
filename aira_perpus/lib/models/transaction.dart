@@ -17,19 +17,27 @@ class Transaction {
 
   Map<String, dynamic> toJson() => {
         'id': id,
-        'bookId': bookId,
-        'memberId': memberId,
-        'borrowDate': borrowDate,
-        'returnDate': returnDate,
+        'book_id': bookId,
+        'member_id': memberId,
+        'borrow_date': borrowDate,
+        'return_date': returnDate,
         'status': status,
       };
 
-  factory Transaction.fromJson(Map<String, dynamic> json) => Transaction(
-        id: json['id'] is String ? int.parse(json['id']) : json['id'],
-        bookId: json['book_id'] ?? json['bookId'],
-        memberId: json['member_id'] ?? json['memberId'],
-        borrowDate: json['borrow_date'] ?? json['borrowDate'] ?? '',
-        returnDate: json['return_date'] ?? json['returnDate'],
-        status: json['status'] ?? 'borrowed',
-      );
+  factory Transaction.fromJson(Map<String, dynamic> json) {
+    final rawBookId = json['book_id'] ?? json['bookId'];
+    final rawMemberId = json['member_id'] ?? json['memberId'];
+
+    return Transaction(
+      // Menggunakan tryParse + toString() agar kebal terhadap error format angka maupun null
+      id: json['id'] != null ? int.tryParse(json['id'].toString()) ?? 0 : 0,
+      bookId: rawBookId != null ? int.tryParse(rawBookId.toString()) ?? 0 : 0,
+      memberId:
+          rawMemberId != null ? int.tryParse(rawMemberId.toString()) ?? 0 : 0,
+
+      borrowDate: json['borrow_date'] ?? json['borrowDate'] ?? '',
+      returnDate: json['return_date'] ?? json['returnDate'],
+      status: json['status'] ?? 'borrowed',
+    );
+  }
 }

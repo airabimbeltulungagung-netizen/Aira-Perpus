@@ -23,7 +23,8 @@ class Book {
         'author': author,
         'category': category,
         'isbn': isbn,
-        'totalStock': totalStock,
+        // BERUBAH: Harus snake_case agar sesuai dengan kolom di database
+        'total_stock': totalStock,
         'available': available,
       };
 
@@ -33,6 +34,7 @@ class Book {
         author: json['author'] ?? '',
         category: json['category'] ?? '',
         isbn: json['isbn'] ?? '',
+        // BERUBAH: Mengambil dari 'total_stock' (prioritas utama)
         totalStock: json['total_stock'] ?? json['totalStock'] ?? 1,
         available: json['available'] ?? 1,
       );

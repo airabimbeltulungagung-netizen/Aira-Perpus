@@ -15,13 +15,17 @@ class Member {
         'id': id,
         'name': name,
         'nis': nis,
-        'memberClass': memberClass,
+        'member_class': memberClass, // BERUBAH: Disesuaikan dengan database
       };
 
   factory Member.fromJson(Map<String, dynamic> json) => Member(
         id: json['id'] is String ? int.parse(json['id']) : json['id'],
         name: json['name'] ?? '',
         nis: json['nis'] ?? '',
-        memberClass: json['class'] ?? json['memberClass'] ?? 'VII-A',
+        // BERUBAH: Agar bisa membaca dari database Supabase
+        memberClass: json['member_class'] ??
+            json['class'] ??
+            json['memberClass'] ??
+            'VII-A',
       );
 }

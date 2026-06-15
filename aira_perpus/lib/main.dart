@@ -67,11 +67,17 @@ class PerpusApp extends StatelessWidget {
 class MainLayoutScreen extends StatefulWidget {
   final String schoolName;
   final String operatorName;
+  final String? initialActiveTab;
+  final bool initialMobileMode;
+  final String? initialSessionId;
 
   const MainLayoutScreen({
     Key? key,
     required this.schoolName,
     required this.operatorName,
+    this.initialActiveTab,
+    this.initialMobileMode = false,
+    this.initialSessionId,
   }) : super(key: key);
 
   @override
@@ -98,7 +104,15 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
     _schoolName = widget.schoolName;
     _operatorName = widget.operatorName;
     _appName = "Aira Perpus";
-    _loadInitialMockData();
+    if (widget.initialActiveTab != null) {
+      _activeTab = widget.initialActiveTab!;
+    }
+
+    // HANYA LOAD DATA MOCK JIKA SUPABASE TIDAK DISETING
+    if (!AppConfig.isConfigured) {
+      _loadInitialMockData();
+    }
+
     _checkSupabaseStatus();
   }
 
@@ -181,15 +195,16 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
     if (hasAnySuccess) {
       if (failedTables.isNotEmpty) {
         _triggerSnackBar(
-          "Koneksi aktif! Harap buat tabel-tabel di Supabase Anda: ${failedTables.join(', ')}",
+          "Koneksi aktif! Terjadi ketidaksesuaian modul tabel: ${failedTables.join(', ')}",
           isError: true,
         );
       } else {
-        _triggerSnackBar("Sinkronisasi semua tabel Supabase berhasil!");
+        _triggerSnackBar(
+            "Sinkronisasi seluruh data sirkulasi perpus berhasil!");
       }
     } else if (failedTables.isNotEmpty) {
       _triggerSnackBar(
-        "Koneksi aktif! Tetapi tabel database belum dibuat. Silakan eksekusi file 'supabase_schema.sql' di SQL Editor Supabase Anda.",
+        "Koneksi server aktif! Kontak developer untuk mengonfigurasi skema tabel sistem.",
         isError: true,
       );
     }
@@ -404,7 +419,7 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
       }
 
       final newTx = Transaction(
-        id: DateTime.now().millisecondsSinceEpoch,
+        id: DateTime.now().millisecondsSinceEpoch % 1000000000,
         bookId: bookId,
         memberId: memberId,
         borrowDate: DateTime.now().toIso8601String().split('T')[0],
@@ -454,19 +469,20 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
   void _registerVisitor(String nis, String method) {
     try {
       final student = _members.firstWhere((m) => m.nis == nis);
+      final newVisitor = Visitor(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        nis: student.nis,
+        name: student.name,
+        classRoom: student.memberClass,
+        timestamp: DateTime.now().toIso8601String(),
+        method: method,
+      );
       setState(() {
-        _visitors.insert(
-          0,
-          Visitor(
-            id: DateTime.now().millisecondsSinceEpoch.toString(),
-            nis: student.nis,
-            name: student.name,
-            classRoom: student.memberClass,
-            timestamp: DateTime.now().toIso8601String(),
-            method: method,
-          ),
-        );
+        _visitors.insert(0, newVisitor);
       });
+      if (AppConfig.isConfigured) {
+        _syncToSupabase("visitors", newVisitor.toJson());
+      }
       _triggerSnackBar(
           'Selamat datang, ${student.name}! Kehadiran Anda berhasil tercatat.');
     } catch (e) {
@@ -480,6 +496,9 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
     setState(() {
       _visitors.removeWhere((item) => item.id == id);
     });
+    if (AppConfig.isConfigured) {
+      _deleteFromSupabase("visitors", id);
+    }
     _triggerSnackBar('Log presensi berhasil dihapus.');
   }
 
@@ -659,26 +678,18 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
-                    children: [
+                    children: const [
                       Icon(
-                        AppConfig.isConfigured
-                            ? Icons.cloud_done_rounded
-                            : Icons.cloud_off_rounded,
-                        color: AppConfig.isConfigured
-                            ? const Color(0xFF1E8A5F)
-                            : Colors.amber.shade800,
+                        Icons.verified_user_rounded,
+                        color: Color(0xFF1E8A5F),
                         size: 16,
                       ),
-                      const SizedBox(width: 8),
+                      SizedBox(width: 8),
                       Text(
-                        AppConfig.isConfigured
-                            ? 'Database Supabase'
-                            : 'Database Offline',
+                        'Aplikasi Aktif',
                         style: TextStyle(
                           fontSize: 12,
-                          color: AppConfig.isConfigured
-                              ? const Color(0xFF1E8A5F)
-                              : Colors.amber.shade800,
+                          color: Color(0xFF1E8A5F),
                           fontWeight: FontWeight.bold,
                         ),
                       ),
@@ -686,9 +697,7 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    AppConfig.isConfigured
-                        ? 'Tersambung real-time dengan postgresql gratis Anda.'
-                        : 'Menyimpan offline di komputer lokal Anda.',
+                    'Pencatatan sirkulasi perpustakaan dan presensi siswa tersinkronisasi otomatis dengan aman.',
                     style: TextStyle(
                         fontSize: 10, color: Colors.grey.shade600, height: 1.4),
                   ),
@@ -829,6 +838,7 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
       case 'members':
         return MembersTab(
           members: _members,
+          schoolName: _schoolName,
           onAddMember: _addMember,
           onEditMember: _editMember,
           onDeleteMember: _deleteMember,
@@ -862,16 +872,23 @@ class _MainLayoutScreenState extends State<MainLayoutScreen> {
         return RemoteScannerTab(
           members: _members,
           books: _books,
+          transactions: _transactions,
           onRegisterVisitor: _registerVisitor,
           onProcessBorrow: _processBorrow,
           onProcessReturn: _processReturn,
           triggerSnackBar: _triggerSnackBar,
+          initialMobileMode: widget.initialMobileMode,
+          initialSessionId: widget.initialSessionId,
         );
       case 'settings':
         return SettingsTab(
           appName: _appName,
           schoolName: _schoolName,
           operatorName: _operatorName,
+          transactions: _transactions,
+          visitors: _visitors,
+          books: _books,
+          members: _members,
           onSave: (appName, schoolName, operatorName) {
             setState(() {
               _appName = appName;

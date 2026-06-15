@@ -16,12 +16,52 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _obscureText = true;
   bool _isLoading = false;
 
-  // Akun Mitra/Sekolah yang didaftarkan khusus oleh Developer (Anda)
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final queryParams = Uri.base.queryParameters;
+      if (queryParams.containsKey('scanner')) {
+        final sessionId = queryParams['scanner']!;
+        if (sessionId.isNotEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content:
+                  Text("Bypass Login berhasil! Menghubungkan Satelit HP..."),
+              backgroundColor: Color(0xFF1E8A5F),
+            ),
+          );
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => MainLayoutScreen(
+                schoolName: "PEMINDAI SATELIT HP",
+                operatorName: "Satelit-HP-$sessionId",
+                initialActiveTab: 'remote_scanner',
+                initialMobileMode: true,
+                initialSessionId: sessionId,
+              ),
+            ),
+          );
+        }
+      }
+    });
+  }
+
+  // PENTING: Mencegah Memory Leak (Aplikasi Ngelag)
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  // Akun Mitra/Sekolah Demo (Offline Fallback)
   final List<Map<String, String>> _registeredSchoolAccounts = [
     {
       'email': 'smpn3@sutojayan.sch.id',
       'password': 'smpn3sutojayan',
-      'school_name': 'SMP NEGERI GLOBAL',
+      'school_name': 'SMPN 03 SUTOJAYAN',
       'operator': 'Admin Perpus Kelompok A'
     },
     {
@@ -45,7 +85,7 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = true;
     });
 
-    // 1. Cek apakah cocok dengan akun lisensi demo bawan secara offline
+    // 1. Cek mode offline (Demo)
     Map<String, String>? matchedAccount;
     for (var acc in _registeredSchoolAccounts) {
       if (acc['email'] == email && acc['password'] == password) {
@@ -66,7 +106,6 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
 
-      // Arahkan ke Dashboard utama dengan membawa data Sekolah terkait
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -79,7 +118,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    // 2. Jika tidak cocok offline, cek ke Supabase Auth (jika terkonfigurasi)
+    // 2. Cek ke Server Master Supabase Anda
     if (AppConfig.isConfigured) {
       try {
         final response = await Supabase.instance.client.auth.signInWithPassword(
@@ -90,10 +129,10 @@ class _LoginScreenState extends State<LoginScreen> {
         if (user != null) {
           final schoolName = user.userMetadata?['school_name'] ??
               user.userMetadata?['school'] ??
-              "INSTITUSI MANDIRI (SUPABASE)";
+              "SISTEM LAYANAN PERPUSTAKAAN";
           final operatorName = user.userMetadata?['operator'] ??
               user.email?.split('@').first.toUpperCase() ??
-              "Operator Mitra";
+              "Operator Perpustakaan";
 
           setState(() {
             _isLoading = false;
@@ -103,7 +142,7 @@ class _LoginScreenState extends State<LoginScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                  "Akses Berhasil! Terhubung secara online ke database Supabase Anda"),
+                  "Akses Berhasil! Menyelaraskan data dengan server cloud perpustakaan."),
               backgroundColor: Color(0xFF1E8A5F),
             ),
           );
@@ -123,9 +162,9 @@ class _LoginScreenState extends State<LoginScreen> {
         setState(() {
           _isLoading = false;
         });
-        debugPrint("[Supabase Auth Error]: $e");
+        debugPrint("[Auth Error]: $e");
         _showErrorSnackBar(
-            "Gagal masuk via Supabase: Kombinasi sandi keliru atau akun belum terdaftar.");
+            "Gagal login: Kombinasi sandi keliru atau lisensi tidak valid.");
         return;
       }
     }
@@ -135,363 +174,8 @@ class _LoginScreenState extends State<LoginScreen> {
       _isLoading = false;
     });
 
-    if (!AppConfig.isConfigured) {
-      _showErrorSnackBar(
-          "Koneksi Supabase belum aktif! Akun ini tidak terdaftar secara offline, dan 'aira_perpus/lib/config.dart' Anda masih berisi URL/Key placeholder.");
-    } else {
-      _showErrorSnackBar(
-          "Gagal login: Email/Sandi salah atau akun belum terverifikasi di Supabase.");
-    }
-  }
-
-  void _showSignUpDialog() {
-    final emailCtrl = TextEditingController();
-    final passCtrl = TextEditingController();
-    final opCtrl = TextEditingController();
-    final schoolCtrl = TextEditingController();
-    bool isRegLoading = false;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              title: Row(
-                children: const [
-                  Icon(Icons.person_add_alt_1_rounded,
-                      color: Color(0xFF1E8A5F)),
-                  SizedBox(width: 10),
-                  Text('Daftar Operator Baru'),
-                ],
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Daftarkan institusi sekolah ke database Supabase Anda yang sedang aktif.',
-                      style: TextStyle(fontSize: 11, color: Color(0xFF64748B)),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: emailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email Operator *',
-                        hintText: 'perpus@darussalam.com',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: passCtrl,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Kata Sandi Baru *',
-                        hintText: 'Minimal 6 karakter',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: opCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Nama Operator *',
-                        hintText: 'Ahmad Fauzi',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: schoolCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Nama Sekolah / Institusi *',
-                        hintText: 'SMP Negeri Global',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Catatan: Pastikan opsi "Confirm Email" pada dashboard Supabase Anda (Auth -> Providers -> Email) telah Dinonaktifkan (Disabled) agar akun langsung aktif tanpa verifikasi email.',
-                      style: TextStyle(
-                          fontSize: 10,
-                          color: Colors.deepOrange,
-                          fontWeight: FontWeight.w500),
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal'),
-                ),
-                isRegLoading
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Color(0xFF1E8A5F))),
-                      )
-                    : ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1E8A5F),
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: () async {
-                          final email = emailCtrl.text.trim();
-                          final pass = passCtrl.text;
-                          final op = opCtrl.text.trim();
-                          final sch = schoolCtrl.text.trim();
-
-                          if (email.isEmpty ||
-                              pass.isEmpty ||
-                              op.isEmpty ||
-                              sch.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text(
-                                      "Harap lengkapi seluruh kolom formulir!")),
-                            );
-                            return;
-                          }
-
-                          setDialogState(() {
-                            isRegLoading = true;
-                          });
-
-                          try {
-                            final res =
-                                await Supabase.instance.client.auth.signUp(
-                              email: email,
-                              password: pass,
-                              data: {
-                                'operator': op,
-                                'school_name': sch,
-                              },
-                            );
-
-                            if (res.user != null) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                      "Pendaftaran sukses! Silakan coba login menggunakan akun baru ini."),
-                                  backgroundColor: Color(0xFF1E8A5F),
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content: Text("Gagal mendaftar: $e"),
-                                  backgroundColor: Colors.red.shade800),
-                            );
-                          } finally {
-                            setDialogState(() {
-                              isRegLoading = false;
-                            });
-                          }
-                        },
-                        child: const Text('Daftar Akun'),
-                      ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showDatabaseSettingsDialog() {
-    final urlCtrl = TextEditingController(
-        text: AppConfig.supabaseUrl == AppConfig.defaultSupabaseUrl
-            ? ""
-            : AppConfig.supabaseUrl);
-    final keyCtrl = TextEditingController(
-        text: AppConfig.supabaseAnonKey == AppConfig.defaultSupabaseAnonKey
-            ? ""
-            : AppConfig.supabaseAnonKey);
-    bool isSaving = false;
-
-    showDialog(
-      context: context,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20)),
-              title: Row(
-                children: const [
-                  Icon(Icons.cloud_sync_rounded, color: Color(0xFF1E8A5F)),
-                  SizedBox(width: 10),
-                  Text('Koneksi Supabase Anda'),
-                ],
-              ),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Text(
-                      'Sambungkan PerpusApp dengan backend PostgreSQL database Supabase Anda sendiri secara instan.',
-                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: urlCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Supabase URL *',
-                        hintText: 'https://xxx.supabase.co',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: keyCtrl,
-                      decoration: const InputDecoration(
-                        labelText: 'Supabase Anon Key *',
-                        hintText: 'Masukkan Public Anon Key',
-                        border: OutlineInputBorder(),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    if (AppConfig.isConfigured) ...[
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E8A5F).withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Status Terkoneksi:',
-                              style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1E8A5F)),
-                            ),
-                            Text(
-                              AppConfig.supabaseUrl,
-                              style: const TextStyle(
-                                  fontSize: 10, fontFamily: 'monospace'),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ] else ...[
-                      const Text(
-                        'Saat ini menggunakan Database Offline (Demo Mode).',
-                        style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.blueGrey,
-                            fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              actions: [
-                if (AppConfig.supabaseUrl != AppConfig.defaultSupabaseUrl)
-                  TextButton(
-                    onPressed: () async {
-                      await AppConfig.clearCustomConfigs();
-                      if (mounted) {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                              content: Text(
-                                  'Konfigurasi database di-reset kembali ke Mode Offline.')),
-                        );
-                        setState(() {});
-                      }
-                    },
-                    child: const Text('Reset Offline',
-                        style: TextStyle(color: Colors.red)),
-                  ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Batal'),
-                ),
-                isSaving
-                    ? const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 16),
-                        child: SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Color(0xFF1E8A5F))),
-                      )
-                    : ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF1E8A5F),
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: () async {
-                          final url = urlCtrl.text.trim();
-                          final key = keyCtrl.text.trim();
-
-                          if (url.isEmpty || key.isEmpty) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                  content: Text(
-                                      "Harap isi kedua kolom URL & Anon Key!")),
-                            );
-                            return;
-                          }
-
-                          setDialogState(() {
-                            isSaving = true;
-                          });
-
-                          try {
-                            await AppConfig.saveCustomConfigs(url, key);
-                            await Supabase.initialize(
-                              url: url,
-                              anonKey: key,
-                            );
-                            if (mounted) {
-                              Navigator.pop(context);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                      "Koneksi Supabase Baru sukses disimpan dan diaktifkan secara instan!"),
-                                  backgroundColor: Color(0xFF1E8A5F),
-                                ),
-                              );
-                              setState(() {});
-                            }
-                          } catch (e) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                  content:
-                                      Text("Format URL atau Key salah: $e"),
-                                  backgroundColor: Colors.red.shade800),
-                            );
-                          } finally {
-                            setDialogState(() {
-                              isSaving = false;
-                            });
-                          }
-                        },
-                        child: const Text('Simpan & Connect'),
-                      ),
-              ],
-            );
-          },
-        );
-      },
-    );
+    _showErrorSnackBar(
+        "Gagal login: Periksa lisensi akun Anda atau koneksi internet.");
   }
 
   void _showErrorSnackBar(String message) {
@@ -529,7 +213,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 16),
               const Text(
-                'PerpusApp Premium',
+                'Aira Perpus Premium',
                 style: TextStyle(
                   fontSize: 26,
                   fontWeight: FontWeight.w900,
@@ -538,7 +222,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const Text(
-                'Sistem Sirkulasi & Database Perpustakaan Sekolah',
+                'Sistem Sirkulasi & Database Perpustakaan Terpusat',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 13,
@@ -566,34 +250,16 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Masuk Operator',
-                          style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1E293B)),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            AppConfig.isConfigured
-                                ? Icons.cloud_done
-                                : Icons.cloud_off_rounded,
-                            color: AppConfig.isConfigured
-                                ? const Color(0xFF1E8A5F)
-                                : const Color(0xFF64748B),
-                            size: 20,
-                          ),
-                          tooltip: 'Pengaturan Koneksi Supabase',
-                          onPressed: _showDatabaseSettingsDialog,
-                        ),
-                      ],
+                    const Text(
+                      'Masuk Operator',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1E293B)),
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'Gunakan akun khusus sekolah yang telah dibuatkan khusus oleh Developer.',
+                      'Silakan masuk menggunakan kredensial lisensi sekolah yang diberikan oleh Developer.',
                       style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                     ),
                     const SizedBox(height: 24),
@@ -671,20 +337,6 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: const Text('Autentikasi Lisensi Masuk',
                                 style: TextStyle(fontWeight: FontWeight.bold)),
                           ),
-                    if (AppConfig.isConfigured) ...[
-                      const SizedBox(height: 10),
-                      TextButton(
-                        onPressed: _showSignUpDialog,
-                        child: const Text(
-                          'Belum Terdaftar? Daftarkan Operator Baru',
-                          style: TextStyle(
-                            color: Color(0xFF1E8A5F),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -726,7 +378,7 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 24),
               const Text(
-                'Hubungi Developer (Mahendra) untuk mendaftarkan lisensi baru bagi sekolah klien Anda.',
+                '© 2026 Aira Hub Edu. Hubungi Developer (Mahendra) untuk pendaftaran lisensi.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                     fontSize: 11,

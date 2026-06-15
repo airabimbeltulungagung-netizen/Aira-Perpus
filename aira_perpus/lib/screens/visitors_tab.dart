@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import '../models/member.dart';
 import '../models/visitor.dart';
+import '../utils/sound_utils.dart';
 
 class VisitorsTab extends StatefulWidget {
   final List<Visitor> visitors;
@@ -29,10 +31,26 @@ class _VisitorsTabState extends State<VisitorsTab> {
   bool _cameraActive = false;
   final TextEditingController _visitorNisCtrl = TextEditingController();
   String? _selectedMemberForVisitor;
+  MobileScannerController? _scannerController;
+
+  void _toggleCamera(bool val) {
+    setState(() {
+      _cameraActive = val;
+      if (_cameraActive) {
+        _scannerController = MobileScannerController(
+          facing: CameraFacing.front,
+        );
+      } else {
+        _scannerController?.dispose();
+        _scannerController = null;
+      }
+    });
+  }
 
   @override
   void dispose() {
     _visitorNisCtrl.dispose();
+    _scannerController?.dispose();
     super.dispose();
   }
 
@@ -112,97 +130,145 @@ class _VisitorsTabState extends State<VisitorsTab> {
                                 Switch(
                                   value: _cameraActive,
                                   activeColor: const Color(0xFF1E8A5F),
-                                  onChanged: (val) {
-                                    setState(() {
-                                      _cameraActive = val;
-                                    });
-                                  },
+                                  onChanged: _toggleCamera,
                                 ),
                               ],
                             ),
                             const SizedBox(height: 8),
                             if (_cameraActive)
                               Container(
-                                height: 160,
+                                height: 260,
                                 decoration: BoxDecoration(
                                   color: Colors.black87,
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(12),
                                 ),
-                                child: Stack(
-                                  children: [
-                                    Positioned.fill(
-                                      child: Center(
-                                        child: Column(
-                                          mainAxisAlignment:
-                                              MainAxisAlignment.center,
-                                          children: [
-                                            const Icon(Icons.videocam,
-                                                color: Colors.white70,
-                                                size: 40),
-                                            const SizedBox(height: 8),
-                                            const Text(
-                                              'Posisikan Barcode Kartu di Sini',
-                                              style: TextStyle(
-                                                  color: Colors.white70,
-                                                  fontSize: 11),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: MobileScanner(
+                                          controller: _scannerController,
+                                          onDetect: (capture) {
+                                            final List<Barcode> barcodes =
+                                                capture.barcodes;
+                                            for (final barcode in barcodes) {
+                                              final String? code =
+                                                  barcode.rawValue;
+                                              if (code != null &&
+                                                  code.isNotEmpty) {
+                                                SoundUtils.playBeep();
+                                                widget.onRegisterVisitor(
+                                                    code, 'camera');
+                                                break;
+                                              }
+                                            }
+                                          },
+                                          errorBuilder:
+                                              (context, error, child) {
+                                            return Center(
+                                              child: Text(
+                                                'Kamera Error: ${error.errorCode.name}',
+                                                style: const TextStyle(
+                                                    color: Colors.white70,
+                                                    fontSize: 12),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      // Laser scanning line
+                                      Center(
+                                        child: Container(
+                                          width: double.infinity,
+                                          height: 2,
+                                          color: Colors.greenAccent,
+                                        ),
+                                      ),
+                                      // Simulating quick-test simulation buttons overlay at bottom of camera view
+                                      Positioned(
+                                        bottom: 12,
+                                        left: 0,
+                                        right: 0,
+                                        child: Center(
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 10, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.black54,
+                                              borderRadius:
+                                                  BorderRadius.circular(20),
                                             ),
-                                            const SizedBox(height: 12),
-                                            SingleChildScrollView(
-                                              scrollDirection: Axis.horizontal,
-                                              child: Row(
-                                                mainAxisAlignment:
-                                                    MainAxisAlignment.center,
-                                                children:
-                                                    widget.members.map((m) {
-                                                  return Padding(
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                        horizontal: 4.0),
-                                                    child: ElevatedButton(
-                                                      onPressed: () {
-                                                        widget
-                                                            .onRegisterVisitor(
-                                                                m.nis,
-                                                                'camera');
-                                                      },
-                                                      style: ElevatedButton
-                                                          .styleFrom(
-                                                        backgroundColor:
-                                                            const Color(
-                                                                0xFF1E8A5F),
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Text(
+                                                  'Ujicoba Scan Cepat (Kamera Emulator)',
+                                                  style: TextStyle(
+                                                      color: Colors.white70,
+                                                      fontSize: 9,
+                                                      fontWeight:
+                                                          FontWeight.bold),
+                                                ),
+                                                const SizedBox(height: 4),
+                                                SingleChildScrollView(
+                                                  scrollDirection:
+                                                      Axis.horizontal,
+                                                  child: Row(
+                                                    mainAxisAlignment:
+                                                        MainAxisAlignment
+                                                            .center,
+                                                    children:
+                                                        widget.members.map((m) {
+                                                      return Padding(
                                                         padding:
                                                             const EdgeInsets
                                                                 .symmetric(
-                                                                horizontal: 8,
-                                                                vertical: 4),
-                                                        minimumSize: Size.zero,
-                                                      ),
-                                                      child: Text(
-                                                        'Scan ${m.name.split(' ')[0]}',
-                                                        style: const TextStyle(
-                                                            fontSize: 9,
-                                                            color:
-                                                                Colors.white),
-                                                      ),
-                                                    ),
-                                                  );
-                                                }).toList(),
-                                              ),
+                                                                horizontal:
+                                                                    4.0),
+                                                        child: ElevatedButton(
+                                                          onPressed: () {
+                                                            widget
+                                                                .onRegisterVisitor(
+                                                                    m.nis,
+                                                                    'camera');
+                                                          },
+                                                          style: ElevatedButton
+                                                              .styleFrom(
+                                                            backgroundColor:
+                                                                const Color(
+                                                                    0xFF1E8A5F),
+                                                            padding:
+                                                                const EdgeInsets
+                                                                    .symmetric(
+                                                                    horizontal:
+                                                                        8,
+                                                                    vertical:
+                                                                        4),
+                                                            minimumSize:
+                                                                Size.zero,
+                                                          ),
+                                                          child: Text(
+                                                            m.name
+                                                                .split(' ')[0],
+                                                            style:
+                                                                const TextStyle(
+                                                                    fontSize: 9,
+                                                                    color: Colors
+                                                                        .white),
+                                                          ),
+                                                        ),
+                                                      );
+                                                    }).toList(),
+                                                  ),
+                                                ),
+                                              ],
                                             ),
-                                          ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                    // Green scan indicator line
-                                    const Positioned(
-                                      left: 20,
-                                      right: 20,
-                                      top: 80,
-                                      child: Divider(
-                                          color: Colors.greenAccent,
-                                          thickness: 2),
-                                    ),
-                                  ],
+                                    ],
+                                  ),
                                 ),
                               )
                             else
@@ -221,9 +287,9 @@ class _VisitorsTabState extends State<VisitorsTab> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Manual simulation text field
+                      // Manual physical scanner input
                       const Text(
-                        'Simulasi Hardware Scanner (Ketik NIS & Enter)',
+                        'Input Scanner Fisik (Arahkan Barcode atau Ketik NIS & Enter)',
                         style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
@@ -242,6 +308,7 @@ class _VisitorsTabState extends State<VisitorsTab> {
                               ),
                               onSubmitted: (val) {
                                 if (val.trim().isNotEmpty) {
+                                  SoundUtils.playBeep();
                                   widget.onRegisterVisitor(
                                       val.trim(), 'barcode');
                                   _visitorNisCtrl.clear();
@@ -253,6 +320,7 @@ class _VisitorsTabState extends State<VisitorsTab> {
                           ElevatedButton(
                             onPressed: () {
                               if (_visitorNisCtrl.text.trim().isNotEmpty) {
+                                SoundUtils.playBeep();
                                 widget.onRegisterVisitor(
                                     _visitorNisCtrl.text.trim(), 'barcode');
                                 _visitorNisCtrl.clear();
@@ -361,7 +429,35 @@ class _VisitorsTabState extends State<VisitorsTab> {
                       ),
                       if (widget.visitors.isNotEmpty)
                         TextButton(
-                          onPressed: widget.onClearVisitors,
+                          onPressed: () {
+                            showDialog(
+                              context: context,
+                              builder: (BuildContext ctx) {
+                                return AlertDialog(
+                                  title: const Text('Konfirmasi Kosongkan Log'),
+                                  content: const Text(
+                                      'Apakah Anda yakin ingin menghapus seluruh log daftar kunjungan pengunjung hari ini?'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx),
+                                      child: const Text('Batal'),
+                                    ),
+                                    ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.red),
+                                      onPressed: () {
+                                        Navigator.pop(ctx);
+                                        widget.onClearVisitors();
+                                      },
+                                      child: const Text('Kosongkan',
+                                          style:
+                                              TextStyle(color: Colors.white)),
+                                    ),
+                                  ],
+                                );
+                              },
+                            );
+                          },
                           child: const Text('Kosongkan Log',
                               style: TextStyle(color: Colors.red)),
                         ),
@@ -453,7 +549,38 @@ class _VisitorsTabState extends State<VisitorsTab> {
                                       icon: const Icon(Icons.delete,
                                           color: Colors.red, size: 16),
                                       onPressed: () {
-                                        widget.onDeleteVisitor(v.id);
+                                        showDialog(
+                                          context: context,
+                                          builder: (BuildContext ctx) {
+                                            return AlertDialog(
+                                              title: const Text(
+                                                  'Konfirmasi Hapus'),
+                                              content: Text(
+                                                  'Apakah Anda yakin ingin menghapus log kehadiran "${v.name}"?'),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(ctx),
+                                                  child: const Text('Batal'),
+                                                ),
+                                                ElevatedButton(
+                                                  style:
+                                                      ElevatedButton.styleFrom(
+                                                          backgroundColor:
+                                                              Colors.red),
+                                                  onPressed: () {
+                                                    Navigator.pop(ctx);
+                                                    widget
+                                                        .onDeleteVisitor(v.id);
+                                                  },
+                                                  child: const Text('Hapus',
+                                                      style: TextStyle(
+                                                          color: Colors.white)),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        );
                                       },
                                     ),
                                   ],

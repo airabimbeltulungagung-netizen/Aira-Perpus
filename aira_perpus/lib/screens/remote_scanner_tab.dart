@@ -1,27 +1,36 @@
 import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config.dart';
 import '../models/book.dart';
 import '../models/member.dart';
+import '../models/transaction.dart';
+import '../utils/sound_utils.dart';
 
 class RemoteScannerTab extends StatefulWidget {
   final List<Member> members;
   final List<Book> books;
+  final List<Transaction> transactions;
   final Function(String nis, String method) onRegisterVisitor;
   final Function(int bookId, int memberId) onProcessBorrow;
   final Function(int transactionId) onProcessReturn;
   final Function(String message, {bool isError}) triggerSnackBar;
+  final bool initialMobileMode;
+  final String? initialSessionId;
 
   const RemoteScannerTab({
     Key? key,
     required this.members,
     required this.books,
+    required this.transactions,
     required this.onRegisterVisitor,
     required this.onProcessBorrow,
     required this.onProcessReturn,
     required this.triggerSnackBar,
+    this.initialMobileMode = false,
+    this.initialSessionId,
   }) : super(key: key);
 
   @override
@@ -38,6 +47,7 @@ class _RemoteScannerTabState extends State<RemoteScannerTab> {
   StreamSubscription? _realtimeSubscription;
   final List<String> _scanHistory = [];
   String _selectedAction = 'visitor'; // visitor, borrow, return
+  Member? _activeBorrowMember; // Memori sementara untuk menyimpan peminjam
 
   // Mobile Pemindai States
   final TextEditingController _codeController = TextEditingController();
@@ -49,6 +59,11 @@ class _RemoteScannerTabState extends State<RemoteScannerTab> {
   @override
   void initState() {
     super.initState();
+    _isMobileMode = widget.initialMobileMode;
+    if (widget.initialSessionId != null) {
+      _isPaired = true;
+      _pairedSessionId = widget.initialSessionId!;
+    }
     // Generate random 4-digit pairing code
     _pairingCode = (Random().nextInt(9000) + 1000).toString();
     _checkAndStartListening();
@@ -120,23 +135,32 @@ class _RemoteScannerTabState extends State<RemoteScannerTab> {
   }
 
   void _handleScannedCode(String code) {
+    SoundUtils.playBeep();
     widget.triggerSnackBar("Menerima scan satelit HP: $code");
 
-    // Auto Action Dispatcher
+    // 1. MODE PENGUNJUNG
     if (_selectedAction == 'visitor') {
       widget.onRegisterVisitor(code, 'barcode');
-    } else if (_selectedAction == 'borrow') {
-      // Find member with this NIS
+    }
+
+    // 2. MODE PEMINJAMAN (REVISI LOGIKA)
+    else if (_selectedAction == 'borrow') {
+      // Cek apakah barcode ini adalah NIS Anggota
       final member = widget.members.firstWhere(
         (m) => m.nis == code,
         orElse: () => Member(id: -1, name: '', nis: '', memberClass: ''),
       );
+
       if (member.id != -1) {
+        // Simpan anggota ke memori sementara
+        setState(() {
+          _activeBorrowMember = member;
+        });
         widget.triggerSnackBar(
-            "Tercocokkan Anggota: ${member.name}. Arahkan HP untuk scan ISBN Buku untuk dipinjam.",
+            "Peminjam diset: ${member.name}. Sekarang arahkan HP ke ISBN Buku untuk proses pinjam.",
             isError: false);
       } else {
-        // Assume it's a book ISBN
+        // Jika bukan NIS, cek apakah ini ISBN Buku
         final book = widget.books.firstWhere(
           (b) => b.isbn == code,
           orElse: () => Book(
@@ -148,17 +172,34 @@ class _RemoteScannerTabState extends State<RemoteScannerTab> {
               totalStock: 0,
               available: 0),
         );
+
         if (book.id != -1) {
-          widget.triggerSnackBar(
-              "Buku terdeteksi: ${book.title}. Hubungkan di tab peminjaman utama.",
-              isError: true);
+          if (_activeBorrowMember != null) {
+            // EKSEKUSI UTAMA: Member ada & Buku ada -> Eksekusi Pinjam!
+            widget.onProcessBorrow(book.id, _activeBorrowMember!.id);
+            widget.triggerSnackBar(
+                "Sukses! Buku '${book.title}' dipinjam oleh ${_activeBorrowMember!.name}.",
+                isError: false);
+
+            // Reset memori agar siap untuk peminjam berikutnya
+            setState(() {
+              _activeBorrowMember = null;
+            });
+          } else {
+            widget.triggerSnackBar(
+                "Buku '${book.title}' terdeteksi. Tapi Anda belum men-scan Kartu Anggota peminjamnya!",
+                isError: true);
+          }
         } else {
-          widget.triggerSnackBar("Code '$code' tidak dikenal di perpustakaan.",
+          widget.triggerSnackBar(
+              "Barcode '$code' tidak dikenal di perpustakaan.",
               isError: true);
         }
       }
-    } else {
-      // Return mode
+    }
+
+    // 3. MODE PENGEMBALIAN (REVISI LOGIKA)
+    else if (_selectedAction == 'return') {
       final book = widget.books.firstWhere(
         (b) => b.isbn == code,
         orElse: () => Book(
@@ -170,9 +211,27 @@ class _RemoteScannerTabState extends State<RemoteScannerTab> {
             totalStock: 0,
             available: 0),
       );
+
       if (book.id != -1) {
-        widget.triggerSnackBar(
-            "Proses pengembalian mandiri via server berjalan untuk '${book.title}'.");
+        // Cari transaksi sirkulasi aktif yang belum dikembalikan untuk buku ini
+        final List<Transaction> activeLoans = widget.transactions
+            .where((t) => t.bookId == book.id && t.status == 'borrowed')
+            .toList();
+
+        if (activeLoans.isNotEmpty) {
+          // Ambil sirkulasi tertua/paling awal untuk dikembalikan
+          final txToReturn = activeLoans.first;
+          widget.onProcessReturn(txToReturn.id);
+          widget.triggerSnackBar(
+              "Proses pengembalian berhasil untuk '${book.title}'.");
+        } else {
+          widget.triggerSnackBar(
+              "Buku '${book.title}' terdeteksi, namun tidak memiliki sirkulasi pinjam aktif.",
+              isError: true);
+        }
+      } else {
+        widget.triggerSnackBar("Buku tidak ditemukan di sistem.",
+            isError: true);
       }
     }
   }
@@ -182,7 +241,7 @@ class _RemoteScannerTabState extends State<RemoteScannerTab> {
     if (scannedCode.trim().isEmpty) return;
     if (!AppConfig.isConfigured) {
       widget.triggerSnackBar(
-          "Pastikan Anda sudah mengonfigurasi kredensial Supabase di web/app ini terlebih dahulu.",
+          "Pastikan sistem server utama terkonfigurasi dengan valid terlebih dahulu.",
           isError: true);
       return;
     }
@@ -332,37 +391,127 @@ class _RemoteScannerTabState extends State<RemoteScannerTab> {
                       const SizedBox(height: 20),
 
                       // Code generator
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 24, vertical: 16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFE2FBF0),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                              color: const Color(0xFF2EBD82).withOpacity(0.3)),
-                        ),
-                        child: Column(
-                          children: [
-                            const Text(
-                              "KODE OTENTIKASI PAIRING",
-                              style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  letterSpacing: 1.2,
-                                  color: Color(0xFF1E8A5F)),
+                      Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 24, vertical: 16),
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE2FBF0),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color:
+                                      const Color(0xFF2EBD82).withOpacity(0.3)),
                             ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _pairingCode,
-                              style: const TextStyle(
-                                  fontSize: 32,
-                                  fontWeight: FontWeight.w900,
-                                  fontFamily: 'monospace',
-                                  letterSpacing: 4,
-                                  color: Color(0xFF156444)),
+                            child: Column(
+                              children: [
+                                const Text(
+                                  "KODE OTENTIKASI PAIRING",
+                                  style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 1.2,
+                                      color: Color(0xFF1E8A5F)),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  _pairingCode,
+                                  style: const TextStyle(
+                                      fontSize: 32,
+                                      fontWeight: FontWeight.w900,
+                                      fontFamily: 'monospace',
+                                      letterSpacing: 4,
+                                      color: Color(0xFF156444)),
+                                ),
+                                const SizedBox(height: 8),
+                                TextButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      _pairingCode =
+                                          (Random().nextInt(9000) + 1000)
+                                              .toString();
+                                    });
+                                    _stopListening();
+                                    _startListening();
+                                    widget.triggerSnackBar(
+                                        "Kode baru berhasil diacak: $_pairingCode");
+                                  },
+                                  icon: const Icon(Icons.refresh,
+                                      size: 16, color: Color(0xFF1E8A5F)),
+                                  label: const Text('Acak Kode Baru',
+                                      style: TextStyle(
+                                          color: Color(0xFF1E8A5F),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 16),
+                          // QR Code & Link Sharing
+                          Card(
+                            elevation: 0,
+                            color: const Color(0xFFF8FAFC),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: const BorderSide(color: Color(0xFFE2E8F0)),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                children: [
+                                  const Text(
+                                    "Scan atau Salin Tautan untuk HP",
+                                    style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.blueGrey),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: Image.network(
+                                      "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${Uri.encodeComponent("${Uri.base.toString().split('?')[0]}?scanner=$_pairingCode")}",
+                                      width: 140,
+                                      height: 140,
+                                      errorBuilder: (ctx, err, stack) =>
+                                          const Icon(Icons.qr_code_2,
+                                              size: 80, color: Colors.grey),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF1E8A5F),
+                                      foregroundColor: Colors.white,
+                                      minimumSize:
+                                          const Size(double.infinity, 38),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: () {
+                                      final baseUrl =
+                                          Uri.base.toString().split('?')[0];
+                                      final pairingUrl =
+                                          "$baseUrl?scanner=$_pairingCode";
+                                      Clipboard.setData(
+                                          ClipboardData(text: pairingUrl));
+                                      widget.triggerSnackBar(
+                                          "Tautan scan HP disalin ke clipboard!");
+                                    },
+                                    icon: const Icon(Icons.copy_all, size: 16),
+                                    label: const Text('Salin Tautan Akses',
+                                        style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.bold)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 20),
 
@@ -408,7 +557,7 @@ class _RemoteScannerTabState extends State<RemoteScannerTab> {
                               const SizedBox(width: 8),
                               const Expanded(
                                 child: Text(
-                                  "Database Supabase belum terkonfigurasi. Silakan isi URL & Anon Key di menu Pengaturan terlebih dahulu.",
+                                  "Layanan database belum terkonfigurasi. Silakan hubungi administrator sistem Anda.",
                                   style: TextStyle(
                                       fontSize: 10,
                                       fontWeight: FontWeight.bold,
@@ -512,8 +661,64 @@ class _RemoteScannerTabState extends State<RemoteScannerTab> {
                               });
                             },
                           ),
+                          RadioListTile<String>(
+                            title: const Text('Catat Pengembalian Buku',
+                                style: TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.bold)),
+                            subtitle: const Text(
+                                'Input scan dari HP otomatis memproses pengembalian sirkulasi buku.',
+                                style: TextStyle(fontSize: 10)),
+                            value: 'return',
+                            groupValue: _selectedAction,
+                            activeColor: const Color(0xFF1E8A5F),
+                            onChanged: (val) {
+                              setState(() {
+                                _selectedAction = val!;
+                              });
+                            },
+                          ),
                         ],
                       ),
+                      if (_selectedAction == 'borrow' &&
+                          _activeBorrowMember != null) ...[
+                        const SizedBox(height: 12),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.info_outline,
+                                  color: Colors.blue.shade700, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  "Peminjam Aktif: ${_activeBorrowMember!.name} (${_activeBorrowMember!.nis}).\nSilakan scan ISBN Buku untuk menyelesaikan peminjaman.",
+                                  style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.blue.shade900,
+                                      height: 1.3),
+                                ),
+                              ),
+                              IconButton(
+                                constraints: const BoxConstraints(),
+                                padding: EdgeInsets.zero,
+                                icon: const Icon(Icons.close,
+                                    size: 16, color: Colors.grey),
+                                onPressed: () {
+                                  setState(() {
+                                    _activeBorrowMember = null;
+                                  });
+                                },
+                              )
+                            ],
+                          ),
+                        ),
+                      ],
                       const Divider(height: 24),
 
                       Row(

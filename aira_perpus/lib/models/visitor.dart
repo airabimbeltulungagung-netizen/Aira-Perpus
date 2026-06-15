@@ -19,17 +19,22 @@ class Visitor {
         'id': id,
         'nis': nis,
         'name': name,
-        'classRoom': classRoom,
+        // BERUBAH: Sesuai dengan kolom 'classroom' di database
+        'classroom': classRoom,
         'timestamp': timestamp,
         'method': method,
       };
 
   factory Visitor.fromJson(Map<String, dynamic> json) => Visitor(
-        id: json['id'] ?? '',
-        nis: json['nis'] ?? '',
-        name: json['name'] ?? '',
-        classRoom: json['classRoom'] ?? json['class'] ?? 'VII-A',
-        timestamp: json['timestamp'] ?? '',
-        method: json['method'] ?? 'manual',
+        // Tambahan .toString() agar aman dari error cast tipe data
+        id: json['id']?.toString() ?? '',
+        nis: json['nis']?.toString() ?? '',
+        name: json['name']?.toString() ?? '',
+        classRoom: json['classroom']?.toString() ??
+            json['classRoom']?.toString() ??
+            json['class']?.toString() ??
+            'VII-A',
+        timestamp: json['timestamp']?.toString() ?? '',
+        method: json['method']?.toString() ?? 'manual',
       );
 }
